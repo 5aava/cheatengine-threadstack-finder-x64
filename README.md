@@ -1,4 +1,4 @@
-# cheatengine-threadstack-finder
+# cheatengine-threadstack-finder-x64
 A simple program that list all thread's base address based on process's name.  
 **Branch x64 work only with 64 bit proccessor**  
 - **64 bit process**  
@@ -11,7 +11,7 @@ Make sure that a target process is opened before passing an argument.
 # Example
 Input
 ```
-threadstack.exe 6540
+threadstack.exe 11876
 ```
 Output
 ```
