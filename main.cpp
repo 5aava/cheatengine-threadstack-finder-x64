@@ -2,7 +2,7 @@
 #include <string>
 #include <vector>
 #include <sstream>
-
+#include <inttypes.h>
 #include <windows.h>
 
 // list all PIDs and TIDs
@@ -11,12 +11,12 @@
 
 #include "ntinfo.h"
 
-std::vector<DWORD> threadList(DWORD pid);
-DWORD GetThreadStartAddress(HANDLE processHandle, HANDLE hThread);
+std::vector<uint64_t> threadList(uint64_t pid);
+uint64_t GetThreadStartAddress(HANDLE processHandle, HANDLE hThread);
 
 int main(int argc, char** argv) {
-	std::string pid = argv[1];
-	DWORD dwProcID;
+	std::string pid = argv[1]; //
+	uint64_t dwProcID;
 
 	std::stringstream stringstream(pid);
 	stringstream >> std::dec >> dwProcID;
@@ -41,21 +41,21 @@ int main(int argc, char** argv) {
 		std::cout << "Success" << std::endl;
 	}
 	
-	std::vector<DWORD> threadId = threadList(dwProcID);
-	int stackNum = 0;
+	std::vector<uint64_t> threadId = threadList(dwProcID);
+	uint64_t stackNum = 0;
 	for (auto it = threadId.begin(); it != threadId.end(); ++it) {
 		HANDLE threadHandle = OpenThread(THREAD_GET_CONTEXT | THREAD_QUERY_INFORMATION, FALSE, *it);
-		DWORD threadStartAddress = GetThreadStartAddress(hProcHandle, threadHandle);
-		printf("TID: 0x%04x = THREADSTACK%2d BASE ADDRESS: 0x%04x\n", *it, stackNum, threadStartAddress);
+		uint64_t threadStartAddress = GetThreadStartAddress(hProcHandle, threadHandle);
+		printf("TID: 0x% " PRIx64 " = THREADSTACK%2d BASE ADDRESS: 0x%" PRIx64 "\n", *it, stackNum, threadStartAddress);
 		stackNum++;
 	}
 
 	return EXIT_SUCCESS;
 }
 
-std::vector<DWORD> threadList(DWORD pid) {
+std::vector<uint64_t> threadList(uint64_t pid) {
 	/* solution from http://stackoverflow.com/questions/1206878/enumerating-threads-in-windows */
-	std::vector<DWORD> vect = std::vector<DWORD>();
+	std::vector<uint64_t> vect = std::vector<uint64_t>();
 	HANDLE h = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
 	if (h == INVALID_HANDLE_VALUE)
 		return vect;
@@ -67,12 +67,10 @@ std::vector<DWORD> threadList(DWORD pid) {
 			if (te.dwSize >= FIELD_OFFSET(THREADENTRY32, th32OwnerProcessID) +
 				sizeof(te.th32OwnerProcessID)) {
 
-
 				if (te.th32OwnerProcessID == pid) {
-					printf("PID: %04d Thread ID: 0x%04x\n", te.th32OwnerProcessID, te.th32ThreadID);
+					printf("PID: %08d Thread ID: 0x%08x\n", te.th32OwnerProcessID, te.th32ThreadID);
 					vect.push_back(te.th32ThreadID);
 				}
-
 			}
 			te.dwSize = sizeof(te);
 		} while (Thread32Next(h, &te));
@@ -81,15 +79,15 @@ std::vector<DWORD> threadList(DWORD pid) {
 	return vect;
 }
 
-DWORD GetThreadStartAddress(HANDLE processHandle, HANDLE hThread) {
+uint64_t GetThreadStartAddress(HANDLE processHandle, HANDLE hThread) {
 	/* rewritten from https://github.com/cheat-engine/cheat-engine/blob/master/Cheat%20Engine/CEFuncProc.pas#L3080 */
-	DWORD used = 0, ret = 0;
-	DWORD stacktop = 0, result = 0;
+	uint64_t used = 0, ret = 0;
+	uint64_t stacktop = 0, result = 0;
 
 	MODULEINFO mi;
 
 	GetModuleInformation(processHandle, GetModuleHandle("kernel32.dll"), &mi, sizeof(mi));
-	stacktop = (DWORD)GetThreadStackTopAddress_x86(processHandle, hThread);
+	stacktop = (uint64_t)GetThreadStackTopAddress_x86(processHandle, hThread);
 
 	/* The stub below has the same result as calling GetThreadStackTopAddress_x86() 
 	change line 54 in ntinfo.cpp to return tbi.TebBaseAddress
@@ -123,15 +121,14 @@ DWORD GetThreadStartAddress(HANDLE processHandle, HANDLE hThread) {
 		//find the stack entry pointing to the function that calls "ExitXXXXXThread"
 		//Fun thing to note: It's the first entry that points to a address in kernel32
 
-		DWORD* buf32 = new DWORD[4096];
+		uint64_t* buf32 = new uint64_t[8192];
 
-		if (ReadProcessMemory(processHandle, (LPCVOID)(stacktop - 4096), buf32, 4096, NULL)) {
-			for (int i = 4096 / 4 - 1; i >= 0; --i) {
-				if (buf32[i] >= (DWORD)mi.lpBaseOfDll && buf32[i] <= (DWORD)mi.lpBaseOfDll + mi.SizeOfImage) {
-					result = stacktop - 4096 + i * 4;
+		if (ReadProcessMemory(processHandle, (LPCVOID)(stacktop - 8192), buf32, 8192, NULL)) {
+			for (int i = 8192 / 8 - 1; i >= 0; --i) {
+				if (buf32[i] >= (uint64_t)mi.lpBaseOfDll && buf32[i] <= (uint64_t)mi.lpBaseOfDll + mi.SizeOfImage) {
+					result = stacktop - 8192 + i * 8;
 					break;
 				}
-
 			}
 		}
 
